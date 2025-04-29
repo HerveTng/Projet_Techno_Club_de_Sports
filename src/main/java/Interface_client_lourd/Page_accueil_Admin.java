@@ -15,7 +15,7 @@ public class Page_accueil_Admin extends JFrame {
 		// TODO Auto-generated constructor stub
 		super("Accueil");
 		this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		this.setSize(600, 400);
+		this.setSize(800, 400);
 		this.setLocationRelativeTo(null);
 		
 		JPanel contentPane = (JPanel) this.getContentPane();
@@ -35,6 +35,9 @@ public class Page_accueil_Admin extends JFrame {
 		
 		JButton btnRecherche = new JButton("Rechercher des clubs");
 		toolBar.add(btnRecherche);
+		
+		JButton btnDemande = new JButton("Demande d'ajout");
+		toolBar.add(btnDemande);
 		
 		return toolBar;
 	}
