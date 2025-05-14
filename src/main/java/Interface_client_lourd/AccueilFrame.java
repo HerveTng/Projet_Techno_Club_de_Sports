@@ -71,7 +71,8 @@ public class AccueilFrame extends JFrame {
    // private JTextField clubNameField;        //  Champ où l’utilisateur tape le nom du club  
     private JTextField communeField;         //  Champ pour la commune  
     private JTextField deptField;            //  Champ pour le département  
-    private JTextField regionField;          //  Champ pour la région  
+    private JTextField regionField;			//  Champ pour la région 
+    private JTextField federationField;     // champ pour la fédération 
     private JButton    searchButton;         //  Bouton pour lancer la recherche  
 
     private JTable               searchTable;      //  Tableau Swing pour afficher le résultat  
@@ -135,6 +136,9 @@ public class AccueilFrame extends JFrame {
         toolBar.add(btnDemande);                  // Bouton demande d'ajout
 
         add(toolBar, BorderLayout.NORTH);         // Ajoute la toolbar en haut (North) de la fenêtre
+        //rafraichissement des pages connexion et demande 
+        btnConnexion.addActionListener(e -> loadCompteData());
+        btnDemande.addActionListener(e-> loadDemandesData());
 
         // --- Construction des panneaux correspondants à chaque onglet ---
         centerPanel.add(createConnexionPanel(),  CARD_CONNEXION);    // Ajoute le panneau connexion sous la clé CARD_CONNEXION
@@ -253,7 +257,7 @@ public class AccueilFrame extends JFrame {
                 "Sélectionnez d’abord un compte dans le tableau",
                 "Aucun compte sélectionné",
                 JOptionPane.WARNING_MESSAGE);
-            return;                                                // 44) On arrête là
+            return;                                                //  On arrête là
         }
 
         //  On prend le mail (clé unique) pour savoir quel compte mettre à jour
@@ -272,8 +276,9 @@ public class AccueilFrame extends JFrame {
             stmt.setString(2, mail);                             //  Place le mail du compte
             int updated = stmt.executeUpdate();                  //  Exécute la mise à jour et retourne le nombre de ligne modifié 
 
-            if (updated == 1) {                                  //  Si une ligne a bien été modifiée
-                tableModel.setValueAt(newHash, row, 3);          //  Met à jour le hash dans le tableau
+            if (updated == 1) {   //  Si une ligne a bien été modifiée
+                loadCompteData();
+            	//tableModel.setValueAt(newHash, row, 3);          //  Met à jour le hash dans le tableau
                 // Affiche la boîte de dialogue avec le nouveau mot de passe en clair
                 JOptionPane.showMessageDialog(this,
                     "Le mot de passe de \"" + mail + "\" a été réinitialisé.\n"
@@ -369,7 +374,13 @@ public class AccueilFrame extends JFrame {
         //  Label “Région :”
         regionField = new JTextField(10);                    
         //  Champ texte pour la région
-        inputs.add(regionField);                            
+        inputs.add(regionField); 
+        
+       inputs.add(new JLabel("Fédération :"));
+       //label Fédération
+       federationField = new JTextField(10);
+       //champ texte pour la federation 
+       inputs.add(federationField);
 
         // --  Bouton “Rechercher” --
         searchButton = new JButton("Rechercher");            
@@ -444,6 +455,13 @@ public class AccueilFrame extends JFrame {
             sql.append(" AND Région LIKE ?");
             params.add("%" + regionField.getText().trim() + "%");
         }
+        
+        // pour la fédération 
+        if (!federationField.getText().trim().isEmpty()) {
+            sql.append(" AND `Fédération` LIKE ?");
+            params.add("%" + federationField.getText().trim() + "%");
+        }
+
 
         // --  Préparer et exécuter la requête sécurisée --
         try (Connection conn = getConnection();
@@ -618,7 +636,7 @@ public class AccueilFrame extends JFrame {
                 }
                 
                 //on lit chacune des colonnes de la ligne et on les stocke dans nors holder 
-                blobHolder[0]   = rs.getBytes("Justificatif");
+                blobHolder[0]    = rs.getBytes("Justificatif");
                 nomHolder[0]    = rs.getString("Nom");
                 prenomHolder[0] = rs.getString("Prénom");
                 mailHolder[0]   = rs.getString("Mail");
@@ -743,7 +761,7 @@ public class AccueilFrame extends JFrame {
             String newPassword = generateRandomPassword(8);
             //  INSERT dans compte
             String insSql = 
-              "INSERT INTO compte(Nom, Prénom, Mail, Mot_passe, Elus, Acteur_sport, Justificatif) " +
+              "INSERT INTO compte(Nom, Prénom, Mail, Mot_passe, Elu, Acteur_sport, Justificatif) " +
               "VALUES(?, ?, ?, ?, ?, ?, ?)";
             try (Connection c = getConnection();
                  PreparedStatement ps = c.prepareStatement(insSql)) {
@@ -781,6 +799,7 @@ public class AccueilFrame extends JFrame {
 
             //  Rafraîchissement + fermeture
             loadDemandesData();
+            loadCompteData();
             dialog.dispose();
             JOptionPane.showMessageDialog(this,
                 "Demande acceptée et compte créé.",
@@ -790,7 +809,7 @@ public class AccueilFrame extends JFrame {
 
 
         dialog.setVisible(true);
-    }
+    } 
 
     
 

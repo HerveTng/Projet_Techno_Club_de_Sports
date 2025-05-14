@@ -122,25 +122,6 @@ public class Page_connexion extends JFrame {
 	}
 
 	
-	 //authenticateHashed sert à vérifier, de manière sécurisée, que le mot de passe saisi par l’utilisateur correspond bien au mot de passe stocké dans la base de données
-	/*private boolean authenticateHashed(String login, String pwd) {
-		String sql ="SELECT Mot_de_passe FROM admin WHERE Log = ?";
-		try(Connection conn = getConnection();
-			PreparedStatement stmt=conn.prepareStatement(sql)){
-			stmt.setString(1, login);
-			try(ResultSet rs = stmt.executeQuery()){ // lance la requête sql en le plaçant dans un try on aura un ResultSet automatiquement fermé 
-				if(!rs.next()) {// rs.next() avance le cursueur du ResultSet sur la premiere ligne
-					return false;//return false s'il ny a aucune ligne 
-				}
-				String storedHash = rs.getString("Mot_de_passe"); // lis la valeur de la première colonne 
-				return BCrypt.checkpw(pwd, storedHash);//applique l’algorithme BCrypt au mot de passe saisi (pwd) en utilisant le sel incorporé dans storedHash, puis compare les deux
-			}
-		}catch(SQLException ex) {
-			ex.printStackTrace();
-			return false;
-		}
-	}*/
-	
 	private void priseEnMainLogin() {
 		String login = txtLogin.getText().trim();// on récupère le login 
 		String pwd = new String(txtConnexion.getPassword());
