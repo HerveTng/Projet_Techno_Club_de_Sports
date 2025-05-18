@@ -139,6 +139,7 @@ public class Page_connexion extends JFrame {
 		boolean ok = authenticateHashed(login, pwd);
 		if(ok) {
 			ouvrirPageAccueil();
+			this.dispose();
 			
 		}else {
 			showError("Identifiants incorrects");

@@ -3,11 +3,11 @@ package Interface_client_lourd;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
-import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
-import java.io.FileOutputStream;
+// pour File, FileOutputStream, IOException, etc.
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.sql.Connection;
@@ -18,15 +18,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-import java.io.*;  // pour File, FileOutputStream, IOException, etc.
-
 
 import javax.swing.AbstractAction;
 import javax.swing.ButtonGroup;
-import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -40,8 +38,6 @@ import javax.swing.JToolBar;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellRenderer;
-import javax.swing.table.TableColumn;
 
 import org.mindrot.jbcrypt.BCrypt;             
 
@@ -62,7 +58,9 @@ public class AccueilFrame extends JFrame {
     private JTable               compteTable;          // Le tableau qui affichera les comptes
     private DefaultTableModel    tableModel;           // Le modèle de données du tableau
     private JButton              resetButton;          // Le bouton pour réinitialiser le mot de passe
-
+    private JButton 			 addButton; 		   // le bouton pour ajouter un compte 
+    private JButton				 editButton;           // le bouton pour modifier un compte 
+    private JButton				 deleteButton;		   // le bouton pour supprimer un compte 
     // -------- Attributs Swing --------
     private final CardLayout cardLayout = new CardLayout();                       // Layout permettant de basculer entre plusieurs panneaux
     private final JPanel centerPanel = new JPanel(cardLayout);                    // Panneau central qui contient les différentes cartes
@@ -207,9 +205,28 @@ public class AccueilFrame extends JFrame {
         //  Quand on clique dessus, on appelle handleResetPassword()
         resetButton.addActionListener(e -> handleResetPassword());
 
+        // je crée le bouton d' ajout 
+        addButton = new JButton("Ajout d'un compte");
+        // Quand on clique dessus on appelle handleAddUser 
+        addButton.addActionListener(e -> handleAddUser() );
+        
+        //je crée le boutton modifier un compte 
+        editButton = new JButton("modifier un compte");
+        //quand on clique dessus on appelle handleEditUser 
+        editButton.addActionListener(e -> handleEditUser());
+        
+        //je crée le bouton pour supprimer un compte 
+        deleteButton = new JButton("supprimer un compte");
+        //quand on clique dessus on appelle handleExitUser 
+        deleteButton.addActionListener(e -> handleExitUser());
+        
+        
         //  Je place le bouton dans un petit panneau en bas à droite
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         south.add(resetButton);
+        south.add(addButton);
+        south.add(editButton);
+        south.add(deleteButton);
         panel.add(south, BorderLayout.SOUTH);
 
         return panel; //  Je renvoie l’onglet complet
@@ -300,11 +317,193 @@ public class AccueilFrame extends JFrame {
                 JOptionPane.ERROR_MESSAGE);
         }
     }
+    private void handleAddUser() {
+    	//invokeLater(Runnable r) place votre bloc de code dans la file d’événements de Swing, 
+    			//pour qu’il soit exécuté après que tous les événements en cours (clics, rafraîchissements, etc.) 
+    			//soient traités, et toujours sur l’EDT.
+    			SwingUtilities.invokeLater(() -> { // expression lambda pour instancier un runnable 
+    		         new AjoutCompte().setVisible(true);
+    			});
+    		
+    }
     
-    /**  
-     * 57) Génère une chaîne aléatoire de lettres et chiffres  
-     *     pour servir de nouveau mot de passe  
-     */
+    
+    private void handleEditUser() {
+        int row = compteTable.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                "Sélectionnez d’abord un compte dans le tableau",
+                "Aucun compte sélectionné",
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // Clé unique pour identifier le compte : l'email
+        String mailOriginal = (String) tableModel.getValueAt(row, 2);
+
+        // Récupération complète du compte en base
+        final String[] nomHolder    = new String[1];
+        final String[] prenomHolder = new String[1];
+        final boolean[] eluHolder   = new boolean[1];
+        final boolean[] actHolder   = new boolean[1];
+        final byte[][] blobHolder   = new byte[1][];
+
+        String selectSql = 
+            "SELECT Nom, Prénom, Elu, Acteur_sport, Justificatif FROM compte WHERE Mail = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(selectSql)) {
+            ps.setString(1, mailOriginal);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    JOptionPane.showMessageDialog(this,
+                        "Compte introuvable en base",
+                        "Erreur",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                nomHolder[0]    = rs.getString("Nom");
+                prenomHolder[0] = rs.getString("Prénom");
+                eluHolder[0]    = rs.getBoolean("Elu");
+                actHolder[0]    = rs.getBoolean("Acteur_sport");
+                blobHolder[0]   = rs.getBytes("Justificatif");
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Erreur SQL lors de la récupération du compte",
+                "Erreur",
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Construction de la boîte de dialogue d’édition
+        JDialog dialog = new JDialog(this, "Modifier le compte " + mailOriginal, true);
+        dialog.setLayout(new BorderLayout(10, 10));
+        dialog.setSize(400, 300);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel form = new JPanel(new GridLayout(0,2,5,5));
+        JTextField nomField    = new JTextField(nomHolder[0]);
+        JTextField prenomField = new JTextField(prenomHolder[0]);
+        JTextField mailField   = new JTextField(mailOriginal);
+        JCheckBox eluCheck     = new JCheckBox("Élu", eluHolder[0]);
+        JCheckBox actCheck     = new JCheckBox("Acteur sport", actHolder[0]);
+
+        form.add(new JLabel("Nom :"));       form.add(nomField);
+        form.add(new JLabel("Prénom :"));    form.add(prenomField);
+        form.add(new JLabel("Mail :"));      form.add(mailField);
+        form.add(new JLabel("Statut :"));    // panel vide
+        JPanel statutPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        statutPanel.add(eluCheck);
+        statutPanel.add(actCheck);
+        form.add(new JLabel(""));            form.add(statutPanel);
+
+        // Bouton pour changer le justificatif
+        final byte[][] newBlobHolder = new byte[1][];
+        JButton changeJustifBtn = new JButton("Changer justificatif (PDF)");
+        changeJustifBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PDF", "pdf"));
+            if (chooser.showOpenDialog(dialog) == JFileChooser.APPROVE_OPTION) {
+                try {
+                    newBlobHolder[0] = java.nio.file.Files.readAllBytes(chooser.getSelectedFile().toPath());
+                } catch (IOException ioex) {
+                    ioex.printStackTrace();
+                    JOptionPane.showMessageDialog(dialog,
+                        "Impossible de lire le fichier sélectionné",
+                        "Erreur",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        form.add(new JLabel("Justificatif :")); form.add(changeJustifBtn);
+
+        dialog.add(form, BorderLayout.CENTER);
+
+        // Panel des boutons Enregistrer / Annuler
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton saveBtn   = new JButton("Enregistrer");
+        JButton cancelBtn = new JButton("Annuler");
+        btns.add(cancelBtn);
+        btns.add(saveBtn);
+        dialog.add(btns, BorderLayout.SOUTH);
+
+        // Action du bouton Annuler
+        cancelBtn.addActionListener(e -> dialog.dispose());
+
+        // Action du bouton Enregistrer
+        saveBtn.addActionListener(e -> {
+            String updateSql = 
+                "UPDATE compte SET Nom = ?, Prénom = ?, Mail = ?, Elu = ?, Acteur_sport = ?, Justificatif = ? " +
+                "WHERE Mail = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                ps.setString(1, nomField.getText().trim());
+                ps.setString(2, prenomField.getText().trim());
+                ps.setString(3, mailField.getText().trim());
+                ps.setBoolean(4, eluCheck.isSelected());
+                ps.setBoolean(5, actCheck.isSelected());
+                // si l'utilisateur a choisi un nouveau PDF, on l'utilise, sinon on remet l'ancien blob
+                ps.setBytes(6, newBlobHolder[0] != null ? newBlobHolder[0] : blobHolder[0]);
+                ps.setString(7, mailOriginal);
+                int updated = ps.executeUpdate();
+                if (updated == 1) {
+                    loadCompteData();
+                    dialog.dispose();
+                    JOptionPane.showMessageDialog(this,
+                        "Compte mis à jour avec succès",
+                        "Succès",
+                        JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                        "Aucune ligne modifiée en base",
+                        "Erreur",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(dialog,
+                    "Erreur SQL lors de la mise à jour",
+                    "Erreur",
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        dialog.setVisible(true);
+    }
+
+    private void handleExitUser() {
+    	int row = compteTable.getSelectedRow();
+    	
+    	if(row < 0) {
+    		JOptionPane.showMessageDialog(this,
+    				"veuillez sélectionner un compte",
+    				"Erreur de selection",
+    				JOptionPane.ERROR_MESSAGE);
+    		return; 
+    	}
+    	String email = (String) compteTable.getValueAt(row, 2);
+    	String delSql = "DELETE FROM compte WHERE Mail = ?";
+    	
+    	try(Connection conn = getConnection();
+    		PreparedStatement ps = conn.prepareStatement(delSql)){
+    		ps.setString(1, email);
+    		ps.executeUpdate();
+    	}catch(SQLException ex) {
+    		ex.printStackTrace();
+    		JOptionPane.showMessageDialog(this,
+    				"Erreur lors de la suppression en table",
+    				"Erreur de Suppression",
+    				JOptionPane.ERROR_MESSAGE);
+    	}
+    	loadCompteData();
+    	JOptionPane.showMessageDialog(this,
+    			"compte supprimé avec succés ",
+    			"suppresion réussi",
+    			JOptionPane.INFORMATION_MESSAGE);
+    	
+    
+    }
+
     private String generateRandomPassword(int length) {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
                        "abcdefghijklmnopqrstuvwxyz" +
