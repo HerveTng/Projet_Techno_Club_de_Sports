@@ -18,6 +18,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+
 
 import javax.swing.AbstractAction;
 import javax.swing.ButtonGroup;
@@ -75,6 +82,11 @@ public class AccueilFrame extends JFrame {
 
     private JTable               searchTable;      //  Tableau Swing pour afficher le résultat  
     private DefaultTableModel    searchTableModel; //  Modèle de données du tableau  
+    
+  // ==== Composants et modèles pour l'onglet historique de connexion =====
+    private JTextArea logsTextArea; //zone de texte partagé pour afficher le contenu des logs 
+    
+    private static final String LOG_FILE_PATH = "C:/Users/Utilisateur/log/mtt.log" ;
 
  // ==== Composants et modèles pour l'onglet Demande d'ajout =====
     private JTable  demandeTable; 
@@ -527,15 +539,55 @@ public class AccueilFrame extends JFrame {
      * Crée le panneau affichant l'historique des connexions
      */
     private JPanel createHistoriquePanel() {
-        JPanel p = new JPanel(new BorderLayout());      // BorderLayout pour un header + zone défilante
-        JLabel header = new JLabel("Historique des connexions", SwingConstants.CENTER); // Titre centré en haut
-        p.add(header, BorderLayout.NORTH);               // Place le titre en haut
+    	 JPanel p = new JPanel(new BorderLayout());                // panneau principal en BorderLayout
+         JLabel header = new JLabel(                               
+             "Historique des connexions",                          // texte du titre
+             SwingConstants.CENTER                                 // centré horizontalement
+         );
+         p.add(header, BorderLayout.NORTH);                         // ajoute le titre en haut
 
-        JTextArea ta = new JTextArea("Ici vous verrez la liste des connexions..."); // Zone de texte
-        ta.setEditable(false);                           // Rend la zone non modifiable
-        JScrollPane scroll = new JScrollPane(ta);         // Ajoute un ascenseur si nécessaire
-        p.add(scroll, BorderLayout.CENTER);               // Place la zone défilante au centre
-        return p;                                        // Retourne le panneau historial
+         logsTextArea = new JTextArea();                            // instancie la zone de texte
+         logsTextArea.setEditable(false);                           // rend la zone non éditable
+         JScrollPane scroll = new JScrollPane(logsTextArea);        // ajoute un scroll automatique
+         p.add(scroll, BorderLayout.CENTER);                        // place le scroll au centre
+
+         // Lorsque ce panneau devient visible, on charge les logs
+         p.addComponentListener(new ComponentAdapter() {
+             @Override
+             public void componentShown(ComponentEvent e) {
+                 loadLogs();                                        // appel à la méthode de lecture
+             }
+         });
+
+         return p; 
+    }
+    
+    /**
+     * Lit le fichier de logs et affiche chaque ligne dans logsTextArea
+     */
+    private void loadLogs() {
+        Path logPath = Paths.get(LOG_FILE_PATH);                   // construit le chemin vers le fichier
+        if (!Files.exists(logPath)) {                              // vérifie l’existence du fichier
+            logsTextArea.setText(
+                "Fichier de logs non trouvé : " + LOG_FILE_PATH   // message si introuvable
+            );
+            return;                                                // sort de la méthode
+        }
+
+        try {
+            // Lecture de toutes les lignes avec l’encodage UTF-8
+            java.util.List<String> lines = Files.readAllLines(
+                logPath, StandardCharsets.UTF_8
+            );
+            // Affiche tout le contenu, séparé par des sauts de ligne
+            logsTextArea.setText(String.join("\n", lines));
+            logsTextArea.setCaretPosition(0);                      // replace le curseur en début
+        } catch (IOException ex) {                                  // capture les erreurs d’I/O
+            ex.printStackTrace();                                  // logs en console pour debug
+            logsTextArea.setText(
+                "Erreur lecture logs : " + ex.getMessage()        // message d’erreur dans l’UI
+            );
+        }
     }
 
     /**
@@ -806,13 +858,14 @@ public class AccueilFrame extends JFrame {
         final String[]   nomHolder    = new String[1];
         final String[]   prenomHolder = new String[1];
         final String[]   mailHolder   = new String[1];
+        final String[]   password     = new String[1];
         final boolean[]  eluHolder    = new boolean[1];
         final boolean[]  acteurHolder = new boolean[1];
 
         // etape 2 :  Récupération en base
         // on écrit la requête qui va recupérer exactement la ligne de la table demande
         //corresppondant à l'id 
-        String sql = "SELECT Justificatif, Nom, Prénom, Mail, Elus, Acteur_sport "
+        String sql = "SELECT Justificatif, Nom, Prénom, Mail, Elus, Acteur_sport, Mdp "
                    + "FROM demande WHERE id = ?";
         
         //on ouvre la connexion mySQL
@@ -836,11 +889,13 @@ public class AccueilFrame extends JFrame {
                 
                 //on lit chacune des colonnes de la ligne et on les stocke dans nors holder 
                 blobHolder[0]    = rs.getBytes("Justificatif");
+                
                 nomHolder[0]    = rs.getString("Nom");
                 prenomHolder[0] = rs.getString("Prénom");
                 mailHolder[0]   = rs.getString("Mail");
                 eluHolder[0]    = rs.getBoolean("Elus");
                 acteurHolder[0] = rs.getBoolean("Acteur_sport");
+                password[0]     = rs.getString("Mdp");
             }
         } catch (SQLException ex) {
             ex.printStackTrace();
@@ -957,7 +1012,7 @@ public class AccueilFrame extends JFrame {
             boolean elu   = eluHolder[0];
             boolean act   = acteurHolder[0];
             byte[] justif = blobHolder[0];
-            String newPassword = generateRandomPassword(8);
+            String newPassword = password[0];
             //  INSERT dans compte
             String insSql = 
               "INSERT INTO compte(Nom, Prénom, Mail, Mot_passe, Elu, Acteur_sport, Justificatif) " +
