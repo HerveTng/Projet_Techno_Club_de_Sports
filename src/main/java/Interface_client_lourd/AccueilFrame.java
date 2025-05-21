@@ -64,6 +64,7 @@ public class AccueilFrame extends JFrame {
     // ===== Composants et modèles pour l’onglet Connexion et mot de passe =====
     private JTable               compteTable;          // Le tableau qui affichera les comptes
     private DefaultTableModel    tableModel;           // Le modèle de données du tableau
+    private JButton 			 showButton;           // Le bouton pour voir le Justificatif  
     private JButton              resetButton;          // Le bouton pour réinitialiser le mot de passe
     private JButton 			 addButton; 		   // le bouton pour ajouter un compte 
     private JButton				 editButton;           // le bouton pour modifier un compte 
@@ -196,7 +197,7 @@ public class AccueilFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(5,5));  //  Panel principal en BorderLayout
 
         //  Définition des colonnes du tableau
-        String[] cols = { "Nom", "Prénom", "Mail", "Mot de passe", "Élu", "Acteur Sport" };
+        String[] cols = { "ID","Nom", "Prénom", "Mail", "Mot de passe", "Élu", "Acteur Sport", "Justificatif" };
         //  Modèle de tableau + interdiction d’éditer les cellules
         tableModel = new DefaultTableModel(cols, 0) {
             @Override
@@ -212,6 +213,11 @@ public class AccueilFrame extends JFrame {
 
         loadCompteData(); //  J’interroge la BDD pour remplir les lignes du tableau
 
+        // je crée le bouton pour voir les Justificatifs 
+        showButton = new JButton("voir le justificatif");
+        // Quand on clique sur le bouton , on appelle showJustificatif 
+        showButton.addActionListener(e -> showJustificatif());
+        
         //  Je crée le bouton de réinitialisation
         resetButton = new JButton("Réinitialiser mot de passe");
         //  Quand on clique dessus, on appelle handleResetPassword()
@@ -235,6 +241,7 @@ public class AccueilFrame extends JFrame {
         
         //  Je place le bouton dans un petit panneau en bas à droite
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        south.add(showButton);
         south.add(resetButton);
         south.add(addButton);
         south.add(editButton);
@@ -251,18 +258,20 @@ public class AccueilFrame extends JFrame {
     private void loadCompteData() {
         tableModel.setRowCount(0); // 33) Vide d’abord toutes les lignes existantes
 
-        String sql = "SELECT Nom, Prénom, Mail, Mot_passe, Elu, Acteur_sport FROM compte";
+        String sql = "SELECT id, Nom, Prénom, Mail, Mot_passe, Elu, Acteur_sport, Justificatif FROM compte";
         try (Connection conn = getConnection();                     //  Ouvre la connexion
              Statement stmt = conn.createStatement();               //  Crée un statement simple
              ResultSet rs = stmt.executeQuery(sql)) {               //  Exécute la requête
             while (rs.next()) {                                     //  Tant qu’il y a une ligne…
                 Object[] row = {                                  //  Je récupère chaque colonne
-                    rs.getString("Nom"),
+                    rs.getInt("id"),
+                	rs.getString("Nom"),
                     rs.getString("Prénom"),
                     rs.getString("Mail"),
                     rs.getString("Mot_passe"),
                     rs.getBoolean("Elu"),
-                    rs.getBoolean("Acteur_sport")
+                    rs.getBoolean("Acteur_sport"),
+                    rs.getBytes("Justificatif")
                 };
                 tableModel.addRow(row);                            //  J’ajoute la ligne au modèle
             }
@@ -273,6 +282,87 @@ public class AccueilFrame extends JFrame {
                 "Erreur",
                 JOptionPane.ERROR_MESSAGE);
         }
+    }
+    private void showJustificatif() {
+    	int row = compteTable.getSelectedRow();
+    	if(row<0) {
+    		JOptionPane.showMessageDialog(this,
+                    "Sélectionnez d’abord un compte dans le tableau",
+                    "Aucun compte sélectionné",
+                    JOptionPane.WARNING_MESSAGE);
+    	}
+       int id = (int) tableModel.getValueAt(row, 0);
+       final byte[][] blobHolder = new byte[1][];
+       
+       String sql = "SELECT Justificatif FROM compte WHERE id = ? ";
+       try(Connection conn = getConnection();
+    	   PreparedStatement ps = conn.prepareStatement(sql)){
+    	   ps.setInt(1, id);
+    	   try(ResultSet rs = ps.executeQuery()){
+    		   if(!rs.next()) {
+    			   JOptionPane.showMessageDialog(this,
+    					   "aucun Justificatif trouvé",
+    					   "Erreur",
+    					   JOptionPane.ERROR_MESSAGE);
+    			   return;
+    		   }
+    		   blobHolder[0] = rs.getBytes("Justificatif");
+    	   }
+       }catch(SQLException ex) {
+    	   ex.printStackTrace();
+    	   ex.printStackTrace();
+           JOptionPane.showMessageDialog(this,
+               "Erreur SQL lors de la récupération du justificatif",
+               "Erreur",
+               JOptionPane.ERROR_MESSAGE);
+           return;
+    	   
+       }
+       
+     //declaration d'une variable tempfile qui ne référence encore aucun fichier 
+       java.io.File tempFile; 
+       try {
+       	//crée physiquement un nouveau fichier vide dans le repertoire temporaire du système 
+           tempFile = java.io.File.createTempFile("justif_" + id + "_", ".pdf");
+           //new FileOutputStream(tempFile) ouvre un flux binaire pour écrire dans le fichier temporaire
+           try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
+           	//copie tous les octet de blobHolder dans le fichier sur le disque en ecrasant tout contenu antérieure
+               fos.write(blobHolder[0]);
+           }
+           //Cette méthode marque le fichier pour être automatiquement supprimé 
+           //lors de la fermeture de la machine virtuelle Java
+           tempFile.deleteOnExit();
+       } catch (java.io.IOException ioex) {
+           ioex.printStackTrace();
+           JOptionPane.showMessageDialog(this,
+               "Erreur écriture fichier temporaire",
+               "Erreur",
+               JOptionPane.ERROR_MESSAGE);
+           return;
+       }
+
+       
+       /**
+        * Desktop est une API Java qui permet d’interagir avec l’environnement de bureau
+        *  (lancer des applications externes, ouvrir des fichiers, etc.)
+        *  
+        *  isDesktopSupported() renvoie true 
+        *  si la plateforme (Windows, macOS, Linux) prend en charge cette API
+        *  
+        * Si ce n’est pas supporté, on n’essaie pas d’ouvrir le fichier pour éviter une exception 
+        */
+       if (Desktop.isDesktopSupported()) {
+           try {
+           	//tentative d'ouverture du fichier 
+               Desktop.getDesktop().open(tempFile);
+           } catch (IOException ioe) {
+               ioe.printStackTrace();
+               JOptionPane.showMessageDialog(this,
+                   "Impossible d’ouvrir le justificatif",
+                   "Erreur",
+                   JOptionPane.ERROR_MESSAGE);
+           }
+       }
     }
 
     /**  
@@ -290,7 +380,7 @@ public class AccueilFrame extends JFrame {
         }
 
         //  On prend le mail (clé unique) pour savoir quel compte mettre à jour
-        String mail = (String) tableModel.getValueAt(row, 2);
+        int id = (int) tableModel.getValueAt(row, 0);
 
         //  Génère un nouveau mot de passe aléatoire de 8 caractères
         String newPwd = generateRandomPassword(8);
@@ -298,11 +388,11 @@ public class AccueilFrame extends JFrame {
         String newHash = BCrypt.hashpw(newPwd, BCrypt.gensalt(12));
 
         // Prépare la requête UPDATE pour changer le hash en BDD
-        String sql = "UPDATE compte SET Mot_passe = ? WHERE Mail = ?";
+        String sql = "UPDATE compte SET Mot_passe = ? WHERE id = ?";
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, newHash);                          //  Place le nouveau hash
-            stmt.setString(2, mail);                             //  Place le mail du compte
+            stmt.setInt(2, id);                             //  Place le mail du compte
             int updated = stmt.executeUpdate();                  //  Exécute la mise à jour et retourne le nombre de ligne modifié 
 
             if (updated == 1) {   //  Si une ligne a bien été modifiée
@@ -310,7 +400,7 @@ public class AccueilFrame extends JFrame {
             	//tableModel.setValueAt(newHash, row, 3);          //  Met à jour le hash dans le tableau
                 // Affiche la boîte de dialogue avec le nouveau mot de passe en clair
                 JOptionPane.showMessageDialog(this,
-                    "Le mot de passe de \"" + mail + "\" a été réinitialisé.\n"
+                    "Le mot de passe de l'id " + id + "\" a été réinitialisé.\n"
                     + "Nouveau mot de passe : " + newPwd,
                     "Réinitialisation réussie",
                     JOptionPane.INFORMATION_MESSAGE);
@@ -350,20 +440,21 @@ public class AccueilFrame extends JFrame {
             return;
         }
         // Clé unique pour identifier le compte : l'email
-        String mailOriginal = (String) tableModel.getValueAt(row, 2);
-
+        //String mailOriginal = (String) tableModel.getValueAt(row, 2);
+        int id = (int) tableModel.getValueAt(row, 0);
         // Récupération complète du compte en base
         final String[] nomHolder    = new String[1];
         final String[] prenomHolder = new String[1];
+        final String[] mailHolder   = new String[1];
         final boolean[] eluHolder   = new boolean[1];
         final boolean[] actHolder   = new boolean[1];
         final byte[][] blobHolder   = new byte[1][];
 
         String selectSql = 
-            "SELECT Nom, Prénom, Elu, Acteur_sport, Justificatif FROM compte WHERE Mail = ?";
+            "SELECT Nom, Prénom, Mail, Elu, Acteur_sport, Justificatif FROM compte WHERE id = ?";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(selectSql)) {
-            ps.setString(1, mailOriginal);
+            ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
                     JOptionPane.showMessageDialog(this,
@@ -374,6 +465,7 @@ public class AccueilFrame extends JFrame {
                 }
                 nomHolder[0]    = rs.getString("Nom");
                 prenomHolder[0] = rs.getString("Prénom");
+                mailHolder[0]	= rs.getString("Mail");
                 eluHolder[0]    = rs.getBoolean("Elu");
                 actHolder[0]    = rs.getBoolean("Acteur_sport");
                 blobHolder[0]   = rs.getBytes("Justificatif");
@@ -388,7 +480,7 @@ public class AccueilFrame extends JFrame {
         }
 
         // Construction de la boîte de dialogue d’édition
-        JDialog dialog = new JDialog(this, "Modifier le compte " + mailOriginal, true);
+        JDialog dialog = new JDialog(this, "Modifier le compte ", true);
         dialog.setLayout(new BorderLayout(10, 10));
         dialog.setSize(400, 300);
         dialog.setLocationRelativeTo(this);
@@ -396,7 +488,7 @@ public class AccueilFrame extends JFrame {
         JPanel form = new JPanel(new GridLayout(0,2,5,5));
         JTextField nomField    = new JTextField(nomHolder[0]);
         JTextField prenomField = new JTextField(prenomHolder[0]);
-        JTextField mailField   = new JTextField(mailOriginal);
+        JTextField mailField   = new JTextField(mailHolder[0]);
         JCheckBox eluCheck     = new JCheckBox("Élu", eluHolder[0]);
         JCheckBox actCheck     = new JCheckBox("Acteur sport", actHolder[0]);
 
@@ -446,7 +538,7 @@ public class AccueilFrame extends JFrame {
         saveBtn.addActionListener(e -> {
             String updateSql = 
                 "UPDATE compte SET Nom = ?, Prénom = ?, Mail = ?, Elu = ?, Acteur_sport = ?, Justificatif = ? " +
-                "WHERE Mail = ?";
+                "WHERE id = ?";
             try (Connection conn = getConnection();
                  PreparedStatement ps = conn.prepareStatement(updateSql)) {
                 ps.setString(1, nomField.getText().trim());
@@ -456,7 +548,7 @@ public class AccueilFrame extends JFrame {
                 ps.setBoolean(5, actCheck.isSelected());
                 // si l'utilisateur a choisi un nouveau PDF, on l'utilise, sinon on remet l'ancien blob
                 ps.setBytes(6, newBlobHolder[0] != null ? newBlobHolder[0] : blobHolder[0]);
-                ps.setString(7, mailOriginal);
+                ps.setInt(7, id);
                 int updated = ps.executeUpdate();
                 if (updated == 1) {
                     loadCompteData();
@@ -493,13 +585,24 @@ public class AccueilFrame extends JFrame {
     				JOptionPane.ERROR_MESSAGE);
     		return; 
     	}
-    	String email = (String) compteTable.getValueAt(row, 2);
-    	String delSql = "DELETE FROM compte WHERE Mail = ?";
+    	int id = (int) compteTable.getValueAt(row, 0);
+    	String delSql = "DELETE FROM compte WHERE id = ?";
     	
     	try(Connection conn = getConnection();
     		PreparedStatement ps = conn.prepareStatement(delSql)){
-    		ps.setString(1, email);
-    		ps.executeUpdate();
+    		ps.setInt(1, id);
+    		int update = ps.executeUpdate();
+    		if (update == 1) {
+    			JOptionPane.showMessageDialog(this,
+    					"compte supprimé en base",
+    					"suppression réussie",
+    					JOptionPane.INFORMATION_MESSAGE);
+    		}else {
+    			JOptionPane.showMessageDialog(this,
+    					" aucun compte supprimé en base",
+    					"echec de la suppression",
+    					JOptionPane.INFORMATION_MESSAGE);
+    		}
     	}catch(SQLException ex) {
     		ex.printStackTrace();
     		JOptionPane.showMessageDialog(this,
@@ -508,10 +611,6 @@ public class AccueilFrame extends JFrame {
     				JOptionPane.ERROR_MESSAGE);
     	}
     	loadCompteData();
-    	JOptionPane.showMessageDialog(this,
-    			"compte supprimé avec succés ",
-    			"suppresion réussi",
-    			JOptionPane.INFORMATION_MESSAGE);
     	
     
     }

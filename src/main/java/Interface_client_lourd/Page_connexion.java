@@ -38,7 +38,7 @@ public class Page_connexion extends JFrame {
 	public Page_connexion() {
 		super("connexion");
 		this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		this.setSize(600, 400);
+		this.setSize(600, 600);
 		this.setLocationRelativeTo(null);
 		this.setVisible(true);
 		
@@ -105,15 +105,18 @@ public class Page_connexion extends JFrame {
 	}
 	
 	private boolean authenticateHashed(String login, String pwd) {
-	    String sql = "SELECT COUNT(*) FROM admin WHERE Log = ? AND Mot_de_passe = ?";
+	    String sql = "SELECT Mot_de_passe FROM admin WHERE Log = ? ";
 	    try (Connection conn = getConnection();// ouvre la connexion à la JDBC
 	         PreparedStatement stmt = conn.prepareStatement(sql)) {//crée un preparedStatement prêt à éxécuter la requête
 	        stmt.setString(1, login); // remplace le premier ? par la valeur de la variable login
-	        stmt.setString(2, pwd); // remplace le deuxième ? par la valeur de pwd
 	        //cela protège contre l'injection sql
 	        try (ResultSet rs = stmt.executeQuery()) {//execute la requête et renvoie un ResultSet contenant une seule ligne et une seule colonne
-	            rs.next();//deplace le curseur sur la première ligne du resultat
-	            return rs.getInt(1) == 1;//on compare la valeur obtenu à 1
+	           if(!rs.next()) {
+	        	   return false;
+	        	   
+	           }
+	           String storeHashed = rs.getString("Mot_de_passe");
+	           return BCrypt.checkpw(pwd, storeHashed);
 	        }
 	    } catch (SQLException ex) {
 	        ex.printStackTrace();
@@ -125,7 +128,6 @@ public class Page_connexion extends JFrame {
 	private void priseEnMainLogin() {
 		String login = txtLogin.getText().trim();// on récupère le login 
 		String pwd = new String(txtConnexion.getPassword());
-		
 		//txtConnexion.getPassword() renvoie un tableau de char[] contenant le mot de passe saisi
 		//Arrays.fill(..., '0') parcourt ce tableau et remplace chaque caractère par '0'
 		Arrays.fill(txtConnexion.getPassword(), '0');
