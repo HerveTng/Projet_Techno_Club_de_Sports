@@ -140,6 +140,7 @@ public class Page_connexion extends JFrame {
 		//choisissones la méthode d'identification 
 		boolean ok = authenticateHashed(login, pwd);
 		if(ok) {
+			SessionManager.setAdminLogin(login);
 			ouvrirPageAccueil();
 			this.dispose();
 			

@@ -61,6 +61,7 @@ public class AccueilFrame extends JFrame {
     private static final String CARD_HISTORIQUE = "Historique des connexions";    // Clé pour la carte Historique
     private static final String CARD_RECHERCHE  = "Rechercher des clubs";         // Clé pour la carte Recherche
     private static final String CARD_DEMANDE    = "Demande d'ajout"; // Clé pour la carte Demande
+    private static final String CARD_AUDIT		= "Audit des actions"; // clé pour le nouvel onglet
     // ===== Composants et modèles pour l’onglet Connexion et mot de passe =====
     private JTable               compteTable;          // Le tableau qui affichera les comptes
     private DefaultTableModel    tableModel;           // Le modèle de données du tableau
@@ -93,6 +94,9 @@ public class AccueilFrame extends JFrame {
     private JTable  demandeTable; 
     private DefaultTableModel demandeTableModel; 
     
+ // ==== Composants et modèles pour l'onglet audit ====
+    private JTable auditTable;
+    private DefaultTableModel auditTableModel;
 
  // nom de la machine hôte qui héberge le SGBD Mysql
  	final static String host = "localhost";
@@ -136,6 +140,8 @@ public class AccueilFrame extends JFrame {
         JToggleButton btnRech      = createToggle(CARD_RECHERCHE, group);
         // Création d'un bouton-onglet pour la demande d'ajout
         JToggleButton btnDemande   = createToggle(CARD_DEMANDE, group);
+        //création d'un bouton onglet pour l'audit
+        JToggleButton btnAudit = createToggle(CARD_AUDIT, group);
 
         // Ajout des boutons à la toolbar avec des séparateurs visuels
         toolBar.add(btnConnexion);                // Ajoute le bouton de connexion
@@ -145,18 +151,21 @@ public class AccueilFrame extends JFrame {
         toolBar.add(btnRech);                     // Bouton recherche
         toolBar.addSeparator();                   // Séparateur
         toolBar.add(btnDemande);                  // Bouton demande d'ajout
-
+        toolBar.addSeparator();
+        toolBar.add(btnAudit);
+        
         add(toolBar, BorderLayout.NORTH);         // Ajoute la toolbar en haut (North) de la fenêtre
         //rafraichissement des pages connexion et demande 
         btnConnexion.addActionListener(e -> loadCompteData());
         btnDemande.addActionListener(e-> loadDemandesData());
+        btnAudit.addActionListener(e -> loadAuditLogs());
 
         // --- Construction des panneaux correspondants à chaque onglet ---
         centerPanel.add(createConnexionPanel(),  CARD_CONNEXION);    // Ajoute le panneau connexion sous la clé CARD_CONNEXION
         centerPanel.add(createHistoriquePanel(), CARD_HISTORIQUE);   // Ajoute le panneau historique
         centerPanel.add(createRecherchePanel(),  CARD_RECHERCHE);    // Ajoute le panneau recherche
         centerPanel.add(createDemandePanel(),    CARD_DEMANDE);      // Ajoute le panneau demande d'ajout
-
+        centerPanel.add(createAuditPanel(), CARD_AUDIT);			// ajoute le panneau audit
         add(centerPanel, BorderLayout.CENTER);     // Place le panneau central (cards) au centre
 
         // Sélection du bouton par défaut et affichage de la première carte
@@ -396,7 +405,8 @@ public class AccueilFrame extends JFrame {
             int updated = stmt.executeUpdate();                  //  Exécute la mise à jour et retourne le nombre de ligne modifié 
 
             if (updated == 1) {   //  Si une ligne a bien été modifiée
-                loadCompteData();
+            	AuditLogger.logAction("RESET PASSWORD", "compte", id, "generation de mot de passe pour l' id=" + id);
+            	loadCompteData();
             	//tableModel.setValueAt(newHash, row, 3);          //  Met à jour le hash dans le tableau
                 // Affiche la boîte de dialogue avec le nouveau mot de passe en clair
                 JOptionPane.showMessageDialog(this,
@@ -551,6 +561,7 @@ public class AccueilFrame extends JFrame {
                 ps.setInt(7, id);
                 int updated = ps.executeUpdate();
                 if (updated == 1) {
+                	AuditLogger.logAction("EDIT", "compte", id, "modificationd de compte id=" + id);
                     loadCompteData();
                     dialog.dispose();
                     JOptionPane.showMessageDialog(this,
@@ -597,6 +608,7 @@ public class AccueilFrame extends JFrame {
     					"compte supprimé en base",
     					"suppression réussie",
     					JOptionPane.INFORMATION_MESSAGE);
+    			AuditLogger.logAction("DELETE", "compte", id, "Suppression du compte id=" + id);
     		}else {
     			JOptionPane.showMessageDialog(this,
     					" aucun compte supprimé en base",
@@ -660,6 +672,8 @@ public class AccueilFrame extends JFrame {
 
          return p; 
     }
+    
+    
     
     /**
      * Lit le fichier de logs et affiche chaque ligne dans logsTextArea
@@ -1163,6 +1177,61 @@ public class AccueilFrame extends JFrame {
 
         dialog.setVisible(true);
     } 
+    
+    private JPanel createAuditPanel() {
+        JPanel panel = new JPanel(new BorderLayout(5,5));
+        JLabel header = new JLabel("Audit des actions administratives", SwingConstants.CENTER);
+        panel.add(header, BorderLayout.NORTH);
+
+        String[] cols = { "Horodatage", "Admin", "Type action", "Table", "Cible (id)", "Détails" };
+        auditTableModel = new DefaultTableModel(cols, 0) {
+            @Override
+            public boolean isCellEditable(int row, int col) {
+                return false;
+            }
+        };
+
+        auditTable = new JTable(auditTableModel);
+        panel.add(new JScrollPane(auditTable), BorderLayout.CENTER);
+
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton refreshBtn = new JButton("Rafraîchir");
+        refreshBtn.addActionListener(e -> loadAuditLogs());
+        south.add(refreshBtn);
+        panel.add(south, BorderLayout.SOUTH);
+
+        loadAuditLogs();
+
+        return panel;
+    }
+
+    private void loadAuditLogs() {
+        auditTableModel.setRowCount(0);
+
+        String sql = "SELECT timestamp, admin_login, action_type, table_name, target_id, details FROM audit_log ORDER BY timestamp DESC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Object[] row = {
+                    rs.getTimestamp("timestamp"),
+                    rs.getString("admin_login"),
+                    rs.getString("action_type"),
+                    rs.getString("table_name"),
+                    rs.getObject("target_id"),
+                    rs.getString("details")
+                };
+                auditTableModel.addRow(row);
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Erreur lors du chargement de l'audit log",
+                "Erreur",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
 
     
 

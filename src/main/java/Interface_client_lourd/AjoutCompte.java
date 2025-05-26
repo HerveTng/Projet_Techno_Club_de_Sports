@@ -167,6 +167,7 @@ public class AjoutCompte extends JFrame {
                 "Compte ajouté avec succès !",
                 "Succès",
                 JOptionPane.INFORMATION_MESSAGE);
+            AuditLogger.logAction("INSERT", "compte", -1, "Ajout compte : mail=" + mail);
             dispose(); 
 
         } catch (SQLException ex) { 
